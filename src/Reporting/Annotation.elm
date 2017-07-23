@@ -11,6 +11,7 @@ module Reporting.Annotation
         , sameAs
         )
 
+import Data exposing (maybe)
 import Dict exposing (Dict)
 import Reporting.Region as R
 
@@ -71,7 +72,7 @@ listToDict : (a -> comparable) -> List (Annotated i a) -> Dict comparable (List 
 listToDict toKey list =
     let
         maybeCons value =
-            Just << Maybe.withDefault [] << Maybe.map ((::) value)
+            Just << maybe [] ((::) value)
 
         add (A info value) dict =
             Dict.update (toKey value) (maybeCons info) dict
