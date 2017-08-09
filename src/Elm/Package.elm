@@ -28,10 +28,10 @@ module Elm.Package
         )
 
 import Char
-import Data exposing (maybe)
 import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Prelude exposing (maybe)
 
 
 -- PACKGE NAMES

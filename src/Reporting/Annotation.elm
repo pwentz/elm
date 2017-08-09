@@ -11,8 +11,8 @@ module Reporting.Annotation
         , sameAs
         )
 
-import Data exposing (maybe)
 import Dict exposing (Dict)
+import Prelude exposing (maybe)
 import Reporting.Region as R
 
 
