@@ -7,6 +7,7 @@ module AST.Variable
         , bool
         , char
         , cmd
+        , compareGlobals
         , cons
         , false
         , float
@@ -104,6 +105,15 @@ inCore home name =
 inHtml : ModuleName.Raw -> String -> Canonical
 inHtml home name =
     Canonical (Module (ModuleName.inHtml home)) name
+
+
+compareGlobals : Global -> Global -> Order
+compareGlobals a b =
+    let
+        compareGlobalsHelp (Global (ModuleName.Canonical (Pkg.Name pkg version) raw) name) =
+            ( pkg, version, raw, name )
+    in
+    compare (compareGlobalsHelp a) (compareGlobalsHelp b)
 
 
 

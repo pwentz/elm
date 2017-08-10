@@ -16,7 +16,8 @@ import AST.Literal as L
 import AST.Pattern as P
 import AST.Variable as Var
 import Dict exposing (Dict)
-import Prelude exposing (Map, lookup)
+import GenericDict exposing (GenericDict)
+import Prelude exposing (lookup)
 import Reporting.Annotation as A
 
 
@@ -62,7 +63,7 @@ we can use for these optimizations.
 
 -}
 type alias VariantDict =
-    Map Var.Home (Dict String Int)
+    GenericDict Var.Home (Dict String Int)
 
 
 
@@ -171,7 +172,7 @@ isComplete variantDict tests =
 
 getArity : VariantDict -> Var.Canonical -> Int
 getArity variantDict (Var.Canonical home name) =
-    case Maybe.andThen (Dict.get name) (lookup home variantDict) of
+    case Maybe.andThen (Dict.get name) (GenericDict.get home variantDict) of
         Just arity ->
             arity
 
