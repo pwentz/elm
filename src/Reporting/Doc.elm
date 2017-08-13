@@ -1,7 +1,12 @@
 module Reporting.Doc
+    -- Stand-in for Text-PrettyPrint-ANSI-Leijen
+    -- https://hackage.haskell.org/package/ansi-wl-pprint-0.6.8.1/docs/Text-PrettyPrint-ANSI-Leijen.html
+    -- — "This module is an extended implementation of the functional pretty printer given by Philip Wadler (1997)"
+    --
+    -- TODO
     exposing
         ( Doc
-        , concat
+        , cat
         , dullred
         , dullyellow
         , empty
@@ -47,19 +52,19 @@ string =
 -- COMBINE
 
 
-concat : List Doc -> Doc
-concat =
+cat : List Doc -> Doc
+cat =
     List.foldl (\(Doc next) (Doc acc) -> Doc (acc ++ next)) empty
 
 
 fillSep : List Doc -> Doc
 fillSep =
-    concat
+    cat
 
 
 vcat : List Doc -> Doc
 vcat =
-    concat
+    cat
 
 
 

@@ -77,7 +77,7 @@ toHint : String -> Doc
 toHint str =
     let
         hint =
-            concat [ underline (string "Hint"), string ":" ]
+            cat [ underline (string "Hint"), string ":" ]
     in
     fillSep (hint :: List.map string (String.words str))
 
@@ -98,7 +98,7 @@ stack chunks =
             Debug.crash "function `stack` requires a non-empty list of docs"
 
         doc :: docs ->
-            List.foldl (\next acc -> concat [ acc, hardline, hardline, next ]) doc docs
+            List.foldl (\next acc -> cat [ acc, hardline, hardline, next ]) doc docs
 
 
 reflowParagraph : String -> Doc
@@ -163,7 +163,7 @@ drawCycle names =
             string "┌─────┐"
 
         nameLine name =
-            concat
+            cat
                 [ string "│    "
                 , dullyellow (string name)
                 ]
@@ -260,7 +260,7 @@ maybeYouWant_ maybeStarter suggestions =
             Just <|
                 stack <|
                     [ maybe identity
-                        (\s help -> concat [ s, space, help ])
+                        (\s help -> cat [ s, space, help ])
                         maybeStarter
                         (string "Maybe you want one of the following?")
                     , indent 4 <|

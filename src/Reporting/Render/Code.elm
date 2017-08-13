@@ -13,7 +13,7 @@ import Reporting.Region as R
 
 (<==>) : Doc -> Doc -> Doc
 (<==>) a b =
-    Doc.concat [ a, Doc.hardline, b ]
+    Doc.cat [ a, Doc.hardline, b ]
 
 
 render : Maybe R.Region -> R.Region -> String -> Doc
@@ -61,7 +61,7 @@ makeUnderline width realEndLine (R.Region (R.Position start c1) (R.Position end 
             zigzag =
                 String.repeat (max 1 (c2 - c1)) "^"
         in
-        Just (Doc.concat [ Doc.string spaces, Doc.dullred (Doc.string zigzag) ])
+        Just (Doc.cat [ Doc.string spaces, Doc.dullred (Doc.string zigzag) ])
 
 
 drawLines : Bool -> Int -> R.Region -> List ( Int, String ) -> Doc -> Doc
@@ -100,4 +100,4 @@ addLineNumber addZigZag width start end n line =
             else
                 Doc.string " "
     in
-    Doc.concat [ Doc.string lineNumber, spacer, line ]
+    Doc.cat [ Doc.string lineNumber, spacer, line ]
