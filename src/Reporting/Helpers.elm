@@ -236,7 +236,7 @@ nearbyNames format name names =
     names
         |> List.map (\x -> ( distance (format name) (format x), x ))
         |> List.sortBy Tuple.first
-        |> List.filter ((<=) editDistance << abs << Tuple.first)
+        |> List.filter ((>) editDistance << abs << Tuple.first)
         |> List.map Tuple.second
 
 
