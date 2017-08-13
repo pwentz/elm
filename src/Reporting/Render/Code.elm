@@ -1,8 +1,7 @@
 module Reporting.Render.Code exposing (render)
 
 import Prelude exposing (last, maybe)
-import Reporting.Doc as Doc exposing (Doc)
-import Reporting.Helpers as H
+import Reporting.Helpers as H exposing (Doc)
 import Reporting.Region as R
 
 
@@ -13,7 +12,7 @@ import Reporting.Region as R
 
 (<==>) : Doc -> Doc -> Doc
 (<==>) a b =
-    Doc.cat [ a, Doc.hardline, b ]
+    H.cat [ a, H.hardline, b ]
 
 
 render : Maybe R.Region -> R.Region -> String -> Doc
@@ -43,7 +42,7 @@ render maybeSubRegion ((R.Region start end) as region) source =
     in
     case makeUnderline width endLine smallerRegion of
         Nothing ->
-            drawLines True width smallerRegion relevantLines Doc.empty
+            drawLines True width smallerRegion relevantLines H.empty
 
         Just underline ->
             drawLines False width smallerRegion relevantLines underline
@@ -61,7 +60,7 @@ makeUnderline width realEndLine (R.Region (R.Position start c1) (R.Position end 
             zigzag =
                 String.repeat (max 1 (c2 - c1)) "^"
         in
-        Just (Doc.cat [ Doc.string spaces, Doc.dullred (Doc.string zigzag) ])
+        Just (H.cat [ H.string spaces, H.dullred (H.string zigzag) ])
 
 
 drawLines : Bool -> Int -> R.Region -> List ( Int, String ) -> Doc -> Doc
@@ -79,7 +78,7 @@ drawLines addZigZag width (R.Region start end) sourceLines finalLine =
 
 drawLine : Bool -> Int -> Int -> Int -> ( Int, String ) -> Doc
 drawLine addZigZag width startLine endLine ( n, line ) =
-    addLineNumber addZigZag width startLine endLine n (Doc.string line)
+    addLineNumber addZigZag width startLine endLine n (H.string line)
 
 
 addLineNumber : Bool -> Int -> Int -> Int -> Int -> Doc -> Doc
@@ -96,8 +95,8 @@ addLineNumber addZigZag width start end n line =
 
         spacer =
             if addZigZag && start <= n && n <= end then
-                Doc.dullred (Doc.string ">")
+                H.dullred (H.string ">")
             else
-                Doc.string " "
+                H.string " "
     in
-    Doc.cat [ Doc.string lineNumber, spacer, line ]
+    H.cat [ H.string lineNumber, spacer, line ]

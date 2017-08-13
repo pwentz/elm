@@ -40,3 +40,13 @@ last list =
 
         _ :: xs ->
             last xs
+
+
+repeat : a -> List b -> List a
+repeat a list =
+    List.repeat (List.length list) a
+
+
+mapBoth : (a -> c) -> (b -> d) -> ( a, b ) -> ( c, d )
+mapBoth f g ( a, b ) =
+    ( f a, g b )

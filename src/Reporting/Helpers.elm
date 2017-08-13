@@ -1,23 +1,40 @@
 module Reporting.Helpers
     exposing
-        ( args
+        ( (<+>)
+        , Doc
+        , args
         , capitalize
+        , cat
         , commaSep
         , distance
         , drawCycle
+        , dullred
+        , dullyellow
+        , empty
+        , fillSep
         , findPotentialTypos
         , findTypoPairs
         , functionName
+        , hang
+        , hardline
         , hintLink
+        , hsep
         , i2t
+        , indent
         , maybeYouWant
         , maybeYouWant_
         , moreArgs
         , nearbyNames
         , ordinalize
+        , parens
         , reflowParagraph
+        , sep
+        , space
         , stack
+        , string
         , toHint
+        , underline
+        , vcat
         , vetTypos
         )
 
@@ -27,7 +44,6 @@ import Dict
 import Elm.Compiler.Version as Compiler
 import Elm.Package as Pkg
 import Prelude exposing (init, last, maybe)
-import Reporting.Doc exposing (..)
 import Set
 import StringDistance as Dist
 
@@ -269,3 +285,116 @@ maybeYouWant_ maybeStarter suggestions =
                                 (dullyellow << string)
                                 (List.take 4 suggestions)
                     ]
+
+
+
+-- DOC
+-- Stand-in for Text-PrettyPrint-ANSI-Leijen
+-- https://hackage.haskell.org/package/ansi-wl-pprint-0.6.8.1/docs/Text-PrettyPrint-ANSI-Leijen.html
+-- — "This module is an extended implementation of the functional pretty printer given by Philip Wadler (1997)"
+
+
+type Doc
+    = Doc String
+
+
+
+-- CREATE
+
+
+empty : Doc
+empty =
+    Doc ""
+
+
+hardline : Doc
+hardline =
+    Doc "\n"
+
+
+space : Doc
+space =
+    Doc " "
+
+
+string : String -> Doc
+string =
+    Doc
+
+
+
+-- COMBINE
+
+
+cat : List Doc -> Doc
+cat =
+    List.foldl (\(Doc next) (Doc acc) -> Doc (acc ++ next)) empty
+
+
+fillSep : List Doc -> Doc
+fillSep =
+    -- TODO
+    cat
+
+
+sep : List Doc -> Doc
+sep =
+    -- TODO
+    cat
+
+
+hsep : List Doc -> Doc
+hsep =
+    -- TODO
+    cat
+
+
+vcat : List Doc -> Doc
+vcat =
+    -- TODO
+    cat
+
+
+
+-- MODIFIERS
+
+
+indent : Int -> Doc -> Doc
+indent n (Doc s) =
+    String.split "\n" s
+        |> String.join ("\n" ++ String.repeat n " ")
+        |> Doc
+
+
+hang : Int -> Doc -> Doc
+hang =
+    -- TODO
+    indent
+
+
+parens : Doc -> Doc
+parens (Doc s) =
+    Doc ("(" ++ s ++ ")")
+
+
+dullred : Doc -> Doc
+dullred =
+    -- TODO
+    identity
+
+
+dullyellow : Doc -> Doc
+dullyellow =
+    -- TODO
+    identity
+
+
+underline : Doc -> Doc
+underline =
+    -- TODO
+    identity
+
+
+(<+>) : Doc -> Doc -> Doc
+(<+>) (Doc a) (Doc b) =
+    Doc (a ++ " " ++ b)
