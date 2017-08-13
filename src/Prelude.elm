@@ -22,3 +22,21 @@ maybe default f maybe =
 
         Nothing ->
             default
+
+
+init : List a -> List a
+init list =
+    List.take (List.length list - 1) list
+
+
+last : List a -> Maybe a
+last list =
+    case list of
+        [] ->
+            Nothing
+
+        [ x ] ->
+            Just x
+
+        _ :: xs ->
+            last xs
