@@ -1,10 +1,12 @@
 module Reporting.Render.Type
     exposing
-        ( Localizer
+        ( Diff(..)
+        , Localizer
         , Style(..)
         , annotation
         , decl
         , diffToDocs
+        , sequenceDiff
         , toDoc
         )
 
@@ -116,8 +118,8 @@ type Diff a
             Same (func both)
 
 
-(<*>) : Diff (a -> b) -> Diff a -> Diff b
-(<*>) function argument =
+applyDiff : Diff a -> Diff (a -> b) -> Diff b
+applyDiff argument function =
     -- Instance Applicative
     case ( function, argument ) of
         ( Diff leftFunc rightFunc, Diff leftArg rightArg ) ->
@@ -133,9 +135,16 @@ type Diff a
             Same (func arg)
 
 
+liftDiff : a -> Diff a
+liftDiff =
+    Same
+
+
 sequenceDiff : List (Diff a) -> Diff (List a)
-sequenceDiff diffs =
-    Debug.crash "TODO"
+sequenceDiff =
+    List.foldr
+        (\diff acc -> liftDiff (::) |> applyDiff diff |> applyDiff acc)
+        (liftDiff [])
 
 
 partitionDiffs : Dict.Dict comparable (Diff a) -> ( List ( comparable, ( a, a ) ), List ( comparable, a ) )
@@ -190,7 +199,7 @@ diff localizer context leftType rightType =
 
         ( Type.Var x, Type.Var y ) ->
             if x == y then
-                Same (string x)
+                liftDiff (string x)
             else
                 difference
                     (docType localizer context leftType)
