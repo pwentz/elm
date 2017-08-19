@@ -45,8 +45,8 @@ toString (Region (Position startLine startColumn) (Position endLine endColumn)) 
 -- JSON
 
 
-encodeRegion : Region -> Json.Value
-encodeRegion (Region start end) =
+encode : Region -> Json.Value
+encode (Region start end) =
     Json.object
         [ ( "start", encodePosition start )
         , ( "end", encodePosition end )

@@ -6,8 +6,10 @@ module Reporting.Helpers
         , capitalize
         , cat
         , commaSep
+        , display
         , distance
         , drawCycle
+        , dullcyan
         , dullred
         , dullyellow
         , empty
@@ -17,9 +19,10 @@ module Reporting.Helpers
         , functionName
         , hang
         , hardline
+        , hcat
         , hintLink
         , hsep
-        , i2t
+        , i2s
         , indent
         , maybeYouWant
         , maybeYouWant_
@@ -27,6 +30,7 @@ module Reporting.Helpers
         , nearbyNames
         , ordinalize
         , parens
+        , plain
         , reflowParagraph
         , sep
         , space
@@ -51,8 +55,8 @@ import StringDistance as Dist
 -- DOC HELPERS
 
 
-i2t : Int -> String
-i2t =
+i2s : Int -> String
+i2s =
     toString
 
 
@@ -66,7 +70,7 @@ functionName opName =
 
 args : Int -> String
 args n =
-    i2t n
+    i2s n
         ++ (if n == 1 then
                 " argument"
             else
@@ -76,7 +80,7 @@ args n =
 
 moreArgs : Int -> String
 moreArgs n =
-    i2t n
+    i2s n
         ++ " more"
         ++ (if n == 1 then
                 " argument"
@@ -169,7 +173,7 @@ ordinalize number =
             else
                 "th"
     in
-    i2t number ++ ending
+    i2s number ++ ending
 
 
 drawCycle : List String -> Doc
@@ -299,6 +303,16 @@ type Doc
 
 
 
+-- DISPLAY
+
+
+display : Float -> Int -> Doc -> String
+display fits width (Doc str) =
+    -- TODO
+    str
+
+
+
 -- CREATE
 
 
@@ -349,6 +363,12 @@ hsep =
     cat
 
 
+hcat : List Doc -> Doc
+hcat =
+    -- TODO
+    cat
+
+
 vcat : List Doc -> Doc
 vcat =
     -- TODO
@@ -383,8 +403,20 @@ dullred =
     identity
 
 
+dullcyan : Doc -> Doc
+dullcyan =
+    -- TODO
+    identity
+
+
 dullyellow : Doc -> Doc
 dullyellow =
+    -- TODO
+    identity
+
+
+plain : Doc -> Doc
+plain =
     -- TODO
     identity
 
