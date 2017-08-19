@@ -780,68 +780,67 @@ contextToText defaultText prefixText stack =
                 anchor =
                     getAnchor rest
             in
-            prefixText
-                ++ (case context of
-                        ExprIf ->
-                            "an `if`" ++ anchor
+            (++) prefixText <|
+                case context of
+                    ExprIf ->
+                        "an `if`" ++ anchor
 
-                        ExprLet ->
-                            "a `let`" ++ anchor
+                    ExprLet ->
+                        "a `let`" ++ anchor
 
-                        ExprFunc ->
-                            "an anonymous function" ++ anchor
+                    ExprFunc ->
+                        "an anonymous function" ++ anchor
 
-                        ExprCase ->
-                            "a `case`" ++ anchor
+                    ExprCase ->
+                        "a `case`" ++ anchor
 
-                        ExprList ->
-                            "a list" ++ anchor
+                    ExprList ->
+                        "a list" ++ anchor
 
-                        ExprTuple ->
-                            "an expression (in parentheses)" ++ anchor
+                    ExprTuple ->
+                        "an expression (in parentheses)" ++ anchor
 
-                        ExprRecord ->
-                            "a record" ++ anchor
+                    ExprRecord ->
+                        "a record" ++ anchor
 
-                        Definition name ->
-                            name ++ "'s definition"
+                    Definition name ->
+                        name ++ "'s definition"
 
-                        Annotation name ->
-                            name ++ "'s type annotation"
+                    Annotation name ->
+                        name ++ "'s type annotation"
 
-                        TypeTuple ->
-                            "a type (in parentheses)" ++ anchor
+                    TypeTuple ->
+                        "a type (in parentheses)" ++ anchor
 
-                        TypeRecord ->
-                            "a record type" ++ anchor
+                    TypeRecord ->
+                        "a record type" ++ anchor
 
-                        PatternList ->
-                            "a list pattern" ++ anchor
+                    PatternList ->
+                        "a list pattern" ++ anchor
 
-                        PatternTuple ->
-                            "a pattern (in parentheses)" ++ anchor
+                    PatternTuple ->
+                        "a pattern (in parentheses)" ++ anchor
 
-                        PatternRecord ->
-                            "a record pattern" ++ anchor
+                    PatternRecord ->
+                        "a record pattern" ++ anchor
 
-                        Module ->
-                            "a module declaration"
+                    Module ->
+                        "a module declaration"
 
-                        Import ->
-                            "an import"
+                    Import ->
+                        "an import"
 
-                        TypeUnion ->
-                            "a union type"
+                    TypeUnion ->
+                        "a union type"
 
-                        TypeAlias ->
-                            "a type alias"
+                    TypeAlias ->
+                        "a type alias"
 
-                        Infix ->
-                            "an infix declaration"
+                    Infix ->
+                        "an infix declaration"
 
-                        Port ->
-                            "a port declaration"
-                   )
+                    Port ->
+                        "a port declaration"
 
 
 getAnchor : ContextStack -> String
