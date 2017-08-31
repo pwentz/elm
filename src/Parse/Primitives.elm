@@ -94,6 +94,11 @@ type alias Error =
     }
 
 
+badParse : Int
+badParse =
+    -1
+
+
 
 -- PRIMITIVES
 
@@ -273,7 +278,7 @@ token problem str =
                 ( newOffset, newRow, newCol ) =
                     Prim.isSubString str offset row col source
             in
-            if newOffset == -1 then
+            if newOffset == badParse then
                 Bad (Theories context [ problem ]) state
             else
                 Good ()
@@ -308,7 +313,7 @@ variable theory isFirst =
                 firstOffset =
                     Prim.isSubChar isFirst offset source
             in
-            if firstOffset == -1 then
+            if firstOffset == badParse then
                 Bad (Theories context [ theory ]) state1
             else
                 let
@@ -333,7 +338,7 @@ varHelp isGood offset row col source indent context =
         newOffset =
             Prim.isSubChar isGood offset source
     in
-    if newOffset == -1 then
+    if newOffset == badParse then
         { source = source
         , offset = offset
         , indent = indent
@@ -376,15 +381,21 @@ keywords =
 -- NUMBER
 
 
-type alias Offset a =
-    Result ( Int, Problem ) ( Int, a )
-
-
 number : Parser L.Literal
 number =
     Parser <|
         \{ source, offset, indent, context, row, col } ->
-            case intHelp offset (Prim.isSubChar isZero offset source) source of
+            let
+                zeroOffset =
+                    Prim.isSubChar isZero offset source
+
+                chompResults =
+                    if zeroOffset == badParse then
+                        chompInt offset source
+                    else
+                        chompZero offset zeroOffset source
+            in
+            case chompResults of
                 Err ( badOffset, problem ) ->
                     Bad problem
                         { source = source
@@ -404,71 +415,6 @@ number =
                         , row = row
                         , col = col + (goodOffset - offset)
                         }
-
-
-intHelp : Int -> Int -> String -> Offset L.Literal
-intHelp offset zeroOffset source =
-    if zeroOffset == -1 then
-        floatHelp offset zeroOffset source
-    else if Prim.isSubChar isDot zeroOffset source /= -1 then
-        floatHelp offset zeroOffset source
-    else if Prim.isSubChar isX zeroOffset source /= -1 then
-        chompDigits Char.isHexDigit (String.slice offset) (offset + 2) source
-            |> Result.map (\( n, f ) -> ( n, readInt (f n source) ))
-    else if Prim.isSubChar isBadIntEnd zeroOffset source == -1 then
-        Ok ( zeroOffset, readInt <| String.slice offset zeroOffset source )
-    else
-        Err ( zeroOffset, BadNumberEnd )
-
-
-floatHelp : Int -> Int -> String -> Offset L.Literal
-floatHelp offset zeroOffset source =
-    let
-        unwrap ( goodOffset, f ) =
-            ( goodOffset, f (String.slice offset goodOffset source) )
-    in
-    if zeroOffset >= 0 then
-        chompDotAndExp zeroOffset source |> Result.map unwrap
-    else
-        let
-            dotOffset =
-                chomp Char.isDigit offset source
-
-            result =
-                chompDotAndExp dotOffset source |> Result.map unwrap
-        in
-        case result of
-            Err _ ->
-                result
-
-            Ok ( n, _ ) ->
-                if n == offset then
-                    Err ( n, BadNumberEnd )
-                else
-                    result
-
-
-readInt : String -> L.Literal
-readInt =
-    readLiteral L.IntNum String.toInt
-
-
-readFloat : String -> L.Literal
-readFloat =
-    readLiteral L.FloatNum String.toFloat
-
-
-readLiteral : (a -> L.Literal) -> (String -> Result x a) -> String -> L.Literal
-readLiteral toLit toResult str =
-    case toResult str of
-        Ok x ->
-            toLit x
-
-        Err _ ->
-            Debug.crash <|
-                "The number parser seems to have a bug.\n"
-                    ++ "Please report an SSCCE to "
-                    ++ "<https://github.com/hkgumbs/elm/issues>."
 
 
 
@@ -532,79 +478,101 @@ chomp isGood offset source =
         chomp isGood newOffset source
 
 
-
--- CHOMP DIGITS
-
-
-chompDigits : (Char -> Bool) -> a -> Int -> String -> Offset a
-chompDigits isValidDigit goodValue offset source =
-    let
-        newOffset =
-            chomp isValidDigit offset source
-    in
-    if newOffset == offset then
-        -- no digits
-        Err ( newOffset, BadNumberEnd )
-    else if Prim.isSubChar isBadIntEnd newOffset source /= -1 then
-        -- ends with non-digit characters
-        Err ( newOffset, BadNumberEnd )
-    else
-        -- all valid digits!
-        Ok ( newOffset, goodValue )
-
-
 isBadIntEnd : Char -> Bool
 isBadIntEnd char =
-    Char.isDigit char || Char.isUpper char || Char.isLower char || isDot char
+    isDot char
+        || isUnderscore char
+        || Char.isDigit char
+        || Char.isUpper char
+        || Char.isLower char
 
 
 
--- CHOMP FLOAT STUFF
+-- CHOMP NUMBER STUFF
 
 
-chompDotAndExp : Int -> String -> Offset (String -> L.Literal)
-chompDotAndExp offset source =
+type alias Offset a =
+    Result ( Int, Problem ) ( Int, a )
+
+
+chompInt : Int -> String -> Offset L.Literal
+chompInt offset source =
     let
-        dotOffset =
-            Prim.isSubChar isDot offset source
+        stopOffset =
+            chomp Char.isDigit offset source
     in
-    if dotOffset == -1 then
-        chompExp True offset source
+    if offset == stopOffset then
+        Err ( stopOffset, Theories [] [] )
+    else if Prim.isSubChar isDot stopOffset source /= badParse then
+        chompFraction offset (stopOffset + 1) source
+    else if Prim.isSubChar isE stopOffset source /= badParse then
+        chompExponent offset (stopOffset + 1) source
+    else if Prim.isSubChar isBadIntEnd stopOffset source /= badParse then
+        Err ( stopOffset, BadNumberEnd )
     else
-        chompExp False (chomp Char.isDigit dotOffset source) source
+        Ok ( stopOffset, readInt offset stopOffset source )
 
 
-chompExp : Bool -> Int -> String -> Offset (String -> L.Literal)
-chompExp maybeInt offset source =
+chompZero : Int -> Int -> String -> Offset L.Literal
+chompZero offset zeroOffset source =
+    if Prim.isSubChar isDot zeroOffset source /= badParse then
+        chompFraction offset (zeroOffset + 1) source
+    else if Prim.isSubChar isX zeroOffset source /= badParse then
+        chompHex offset (zeroOffset + 1) source
+    else if Prim.isSubChar Char.isDigit zeroOffset source /= badParse then
+        Err ( zeroOffset, BadNumberZero )
+    else
+        Ok ( zeroOffset, L.IntNum 0 )
+
+
+chompFraction : Int -> Int -> String -> Offset L.Literal
+chompFraction offset dotOffset source =
     let
-        eOffset =
-            Prim.isSubChar isE offset source
+        stopOffset =
+            chomp Char.isDigit dotOffset source
     in
-    if eOffset == -1 then
-        Ok
-            ( offset
-            , if maybeInt then
-                readInt
-              else
-                readFloat
-            )
+    if dotOffset == stopOffset then
+        Err ( stopOffset, BadNumberDot )
+    else if Prim.isSubChar isE stopOffset source /= badParse then
+        chompExponent offset (stopOffset + 1) source
+    else if Prim.isSubChar isBadIntEnd stopOffset source /= badParse then
+        Err ( stopOffset, BadNumberEnd )
     else
-        let
-            opOffset =
-                Prim.isSubChar isPlusOrMinus eOffset source
+        Ok ( stopOffset, readFloat offset stopOffset source )
 
-            expOffset =
-                if opOffset == -1 then
-                    eOffset
-                else
-                    opOffset
-        in
-        if Prim.isSubChar isZero expOffset source /= -1 then
-            Err ( expOffset, BadNumberExp )
-        else if Prim.isSubChar Char.isDigit expOffset source == -1 then
-            Err ( expOffset, BadNumberExp )
-        else
-            chompDigits Char.isDigit readFloat expOffset source
+
+chompExponent : Int -> Int -> String -> Offset L.Literal
+chompExponent offset eOffset source =
+    let
+        expOffset =
+            if Prim.isSubChar isPlusOrMinus eOffset source /= badParse then
+                eOffset + 1
+            else
+                eOffset
+
+        newOffset =
+            chomp Char.isDigit expOffset source
+    in
+    if newOffset == expOffset then
+        Err ( newOffset, BadNumberExp )
+    else if Prim.isSubChar isBadIntEnd newOffset source /= badParse then
+        Err ( newOffset, BadNumberExp )
+    else
+        Ok ( newOffset, readFloat offset newOffset source )
+
+
+chompHex : Int -> Int -> String -> Offset L.Literal
+chompHex offset xOffset source =
+    let
+        newOffset =
+            chomp Char.isHexDigit xOffset source
+    in
+    if newOffset == xOffset then
+        Err ( newOffset, BadNumberHex )
+    else if Prim.isSubChar isBadIntEnd newOffset source /= badParse then
+        Err ( newOffset, BadNumberHex )
+    else
+        Ok ( newOffset, readInt offset newOffset source )
 
 
 isDot : Char -> Bool
@@ -630,3 +598,35 @@ isZero char =
 isPlusOrMinus : Char -> Bool
 isPlusOrMinus char =
     char == '+' || char == '-'
+
+
+isUnderscore : Char -> Bool
+isUnderscore char =
+    char == '_'
+
+
+
+-- LITERALS
+
+
+readInt : Int -> Int -> String -> L.Literal
+readInt start end source =
+    readLiteral L.IntNum String.toInt (String.slice start end source)
+
+
+readFloat : Int -> Int -> String -> L.Literal
+readFloat start end source =
+    readLiteral L.FloatNum String.toFloat (String.slice start end source)
+
+
+readLiteral : (a -> L.Literal) -> (String -> Result x a) -> String -> L.Literal
+readLiteral toLit toResult str =
+    case toResult str of
+        Ok x ->
+            toLit x
+
+        Err _ ->
+            Debug.crash <|
+                "The number parser seems to have a bug.\n"
+                    ++ "Please report an SSCCE to "
+                    ++ "<https://github.com/hkgumbs/elm/issues>."

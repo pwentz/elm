@@ -33,9 +33,11 @@ suite =
                         , "0x0123789" => Ok (IntNum 0x00123789)
                         , ".1234" => Err (E.Theories [] [])
                         , "1." => Err E.BadNumberDot
-                        , "1a" => Err E.BadNumberEnd
                         , "1_" => Err E.BadNumberEnd
+                        , "1.2_" => Err E.BadNumberEnd
                         , "1e" => Err E.BadNumberExp
+                        , "1e." => Err E.BadNumberExp
+                        , "0x" => Err E.BadNumberHex
                         , "0x7.5" => Err E.BadNumberHex
                         , "0123" => Err E.BadNumberZero
                         ]
