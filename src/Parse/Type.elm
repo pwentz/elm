@@ -3,6 +3,7 @@ module Parse.Type exposing (expression, unionConstructor)
 import AST.Type as Type
 import AST.Variable as Var
 import Parse.Helpers exposing (..)
+import Parse.Primitives exposing (..)
 import Reporting.Annotation as A
 import Reporting.Error.Syntax as E
 import Reporting.Region as R

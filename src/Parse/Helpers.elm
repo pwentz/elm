@@ -1,17 +1,16 @@
 module Parse.Helpers
     exposing
-        ( Parser
+        ( (|.)
+        , (|=)
         , SParser
-        , SPos(..)
-        , capVar
+        , addLocation
+        , checkSpace
         , comma
         , dot
-        , getPosition
         , hasType
           --, hint
         , leftCurly
         , leftParen
-        , lowVar
           -- , oneOf
         , pipe
         , qualifiedCapVar
@@ -21,11 +20,9 @@ module Parse.Helpers
         , rightParen
         )
 
-import AST.Helpers as Help exposing (isSymbol)
 import AST.Literal as L
 import Char
-import Parser as P
-import Parser.LowLevel as P
+import Parse.Primitives as P exposing (Parser)
 import Reporting.Annotation as A
 import Reporting.Error.Syntax as E
     exposing
@@ -41,14 +38,14 @@ import Set
 -- PARSER
 
 
-type alias Parser a =
-    P.Parser ( E.Context, R.Position ) Problem a
+(|=) : Parser (a -> b) -> Parser a -> Parser b
+(|=) funcParser nextParser =
+    P.map2 (<|) funcParser nextParser
 
 
-deadend : List Theory -> Parser a
-deadend theory =
-    -- TODO
-    P.fail (Theories [] [])
+(|.) : Parser a -> Parser b -> Parser a
+(|.) keepParser ignoreParser =
+    P.map2 always keepParser ignoreParser
 
 
 
@@ -57,82 +54,64 @@ deadend theory =
 
 dot : Parser ()
 dot =
-    symbol "."
+    P.symbol "."
 
 
 comma : Parser ()
 comma =
-    symbol ","
+    P.symbol ","
 
 
 pipe : Parser ()
 pipe =
-    symbol "|"
+    P.symbol "|"
 
 
 hasType : Parser ()
 hasType =
-    symbol ":"
+    P.symbol ":"
 
 
 rightArrow : Parser ()
 rightArrow =
-    symbol "->"
+    P.symbol "->"
 
 
 leftParen : Parser ()
 leftParen =
-    symbol "("
+    P.symbol "("
 
 
 rightParen : Parser ()
 rightParen =
-    symbol ")"
+    P.symbol ")"
 
 
 leftCurly : Parser ()
 leftCurly =
-    symbol "{"
+    P.symbol "{"
 
 
 rightCurly : Parser ()
 rightCurly =
-    symbol "}"
-
-
-symbol : String -> Parser ()
-symbol str =
-    P.mapError
-        (\e -> Theories e.context [ Symbol e.problem ])
-        (P.token str)
+    P.symbol "}"
 
 
 
--- KEYWORDS
 -- VARIABLES
-
-
-lowVar : Parser String
-lowVar =
-    variable Char.isLower LowVar
-
-
-capVar : Parser String
-capVar =
-    variable Char.isUpper CapVar
 
 
 qualifiedVar : Parser String
 qualifiedVar =
     P.oneOf
-        [ lowVar
-        , P.andThen (\var -> qualifiedVarHelp lowVar [ var ]) capVar
+        [ P.lowVar
+        , P.andThen (\var -> qualifiedVarHelp P.lowVar [ var ]) P.capVar
         ]
 
 
 qualifiedCapVar : Parser String
 qualifiedCapVar =
-    P.andThen (\var -> qualifiedVarHelp (deadend [ E.CapVar ]) [ var ]) capVar
+    P.andThen (\var -> qualifiedVarHelp (P.deadend [ E.CapVar ]) [ var ]) P.capVar
 
 
 qualifiedVarHelp : Parser String -> List String -> Parser String
@@ -141,7 +120,7 @@ qualifiedVarHelp altEnding vars =
         [ let
             step () =
                 P.oneOf
-                    [ P.andThen (\var -> qualifiedVarHelp altEnding (var :: vars)) capVar
+                    [ P.andThen (\var -> qualifiedVarHelp altEnding (var :: vars)) P.capVar
                     , P.map (\var -> String.join "." (List.reverse (var :: vars))) altEnding
                     ]
           in
@@ -150,29 +129,39 @@ qualifiedVarHelp altEnding vars =
         ]
 
 
-variable : (Char -> Bool) -> Theory -> Parser String
-variable isGoodStart theory =
-    P.mapError
-        (\{ context } -> Theories context [ theory ])
-        (P.variable isGoodStart isAlphaNum keywords)
-
-
 
 -- WHITESPACE
 
 
 type alias SParser a =
-    Parser ( a, R.Position, SPos )
+    Parser ( a, R.Position, P.SPos )
 
 
-type SPos
-    = SPos R.Position
+spaces : Parser ()
+spaces =
+    P.andThen checkSpace P.whitespace
+
+
+checkSpace : P.SPos -> Parser ()
+checkSpace (P.SPos (R.Position _ col)) =
+    let
+        check indent =
+            if col > indent && col > 1 then
+                P.succeed ()
+            else
+                P.deadend [ E.BadSpace ]
+    in
+    P.andThen check P.getIndent
 
 
 
--- STATE
+-- LOCATION
 
 
-getPosition : Parser R.Position
-getPosition =
-    P.map (\( x, y ) -> R.Position x y) P.getPosition
+addLocation : Parser a -> Parser (A.Located a)
+addLocation parser =
+    P.succeed (,,)
+        |= P.getPosition
+        |= parser
+        |= P.getPosition
+        |> P.map (\( start, value, end ) -> A.at start end value)

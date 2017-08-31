@@ -2,12 +2,17 @@ module Parse.Primitives
     exposing
         ( Error
         , Parser
+        , SPos(..)
         , andThen
         , capVar
+        , deadend
         , delayedCommit
         , delayedCommitMap
         , end
         , fail
+        , getIndent
+        , getPosition
+        , hint
         , inContext
         , keyword
         , lazy
@@ -19,6 +24,7 @@ module Parse.Primitives
         , run
         , succeed
         , symbol
+        , whitespace
         )
 
 import AST.Literal as L
@@ -97,6 +103,25 @@ type alias Error =
 badParse : Int
 badParse =
     -1
+
+
+deadend : List Theory -> Parser a
+deadend theories =
+    Parser <|
+        \({ context } as state) ->
+            Bad (Theories context theories) state
+
+
+hint : E.Next -> Parser a -> Parser a
+hint next (Parser parse) =
+    Parser <|
+        \state ->
+            case parse state of
+                Bad problem ({ context } as state1) ->
+                    Bad (Theories context [ Expecting next ]) state1
+
+                (Good _ _) as step ->
+                    step
 
 
 
@@ -418,6 +443,56 @@ number =
 
 
 
+-- WHITESPACE
+
+
+type SPos
+    = SPos R.Position
+
+
+whitespace : Parser SPos
+whitespace =
+    Parser <|
+        \state ->
+            case
+                whitespaceHelp
+                    state.offset
+                    state.row
+                    state.col
+                    state.source
+            of
+                ( Just problem, newOffset, newRow, newCol ) ->
+                    Bad problem
+                        { state
+                            | offset = newOffset
+                            , row = newRow
+                            , col = newCol
+                        }
+
+                ( Nothing, newOffset, newRow, newCol ) ->
+                    Good (SPos (R.Position newRow newCol))
+                        { state
+                            | offset = newOffset
+                            , row = newRow
+                            , col = newCol
+                        }
+
+
+whitespaceHelp : Int -> Int -> Int -> String -> ( Maybe Problem, Int, Int, Int )
+whitespaceHelp offset row col source =
+    let
+        newOffset =
+            chomp isSpace offset source
+    in
+    if Prim.isSubChar isNewLine newOffset source /= badParse then
+        whitespaceHelp (newOffset + 1) (row + 1) 1 source
+    else if Prim.isSubChar isTab newOffset source /= badParse then
+        ( Just Tab, newOffset, row, col )
+    else
+        ( Nothing, newOffset, row, col + newOffset - offset )
+
+
+
 -- END
 
 
@@ -463,7 +538,25 @@ changeContext newContext { source, offset, indent, row, col } =
 
 
 
--- CHOMPERS
+-- STATE
+
+
+getPosition : Parser R.Position
+getPosition =
+    Parser <|
+        \({ row, col } as state) ->
+            Good (R.Position row col) state
+
+
+getIndent : Parser Int
+getIndent =
+    Parser <|
+        \({ indent } as state) ->
+            Good indent state
+
+
+
+-- CHOMP
 
 
 chomp : (Char -> Bool) -> Int -> String -> Int
@@ -478,24 +571,15 @@ chomp isGood offset source =
         chomp isGood newOffset source
 
 
-isBadIntEnd : Char -> Bool
-isBadIntEnd char =
-    isDot char
-        || isUnderscore char
-        || Char.isDigit char
-        || Char.isUpper char
-        || Char.isLower char
-
-
 
 -- CHOMP NUMBER STUFF
 
 
-type alias Offset a =
-    Result ( Int, Problem ) ( Int, a )
+type alias Number =
+    Result ( Int, Problem ) ( Int, L.Literal )
 
 
-chompInt : Int -> String -> Offset L.Literal
+chompInt : Int -> String -> Number
 chompInt offset source =
     let
         stopOffset =
@@ -513,7 +597,7 @@ chompInt offset source =
         Ok ( stopOffset, readInt offset stopOffset source )
 
 
-chompZero : Int -> Int -> String -> Offset L.Literal
+chompZero : Int -> Int -> String -> Number
 chompZero offset zeroOffset source =
     if Prim.isSubChar isDot zeroOffset source /= badParse then
         chompFraction offset (zeroOffset + 1) source
@@ -525,7 +609,7 @@ chompZero offset zeroOffset source =
         Ok ( zeroOffset, L.IntNum 0 )
 
 
-chompFraction : Int -> Int -> String -> Offset L.Literal
+chompFraction : Int -> Int -> String -> Number
 chompFraction offset dotOffset source =
     let
         stopOffset =
@@ -541,7 +625,7 @@ chompFraction offset dotOffset source =
         Ok ( stopOffset, readFloat offset stopOffset source )
 
 
-chompExponent : Int -> Int -> String -> Offset L.Literal
+chompExponent : Int -> Int -> String -> Number
 chompExponent offset eOffset source =
     let
         expOffset =
@@ -561,7 +645,7 @@ chompExponent offset eOffset source =
         Ok ( newOffset, readFloat offset newOffset source )
 
 
-chompHex : Int -> Int -> String -> Offset L.Literal
+chompHex : Int -> Int -> String -> Number
 chompHex offset xOffset source =
     let
         newOffset =
@@ -573,6 +657,10 @@ chompHex offset xOffset source =
         Err ( newOffset, BadNumberHex )
     else
         Ok ( newOffset, readInt offset newOffset source )
+
+
+
+-- CHARACTER CHOMP HELPERS
 
 
 isDot : Char -> Bool
@@ -605,8 +693,32 @@ isUnderscore char =
     char == '_'
 
 
+isBadIntEnd : Char -> Bool
+isBadIntEnd char =
+    isDot char
+        || isUnderscore char
+        || Char.isDigit char
+        || Char.isUpper char
+        || Char.isLower char
 
--- LITERALS
+
+isSpace : Char -> Bool
+isSpace char =
+    char == ' ' || char == '\x0D'
+
+
+isNewLine : Char -> Bool
+isNewLine char =
+    char == '\n'
+
+
+isTab : Char -> Bool
+isTab char =
+    char == '\t'
+
+
+
+-- LITERAL CHOMP HELPERS
 
 
 readInt : Int -> Int -> String -> L.Literal
