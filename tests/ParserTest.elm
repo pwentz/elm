@@ -53,10 +53,11 @@ whitespace =
             , "{-|-}" => Ok (P.SPos (R.Position 1 5))
             , "{-|\n\n-} " => Ok (P.SPos (R.Position 3 4))
             , "-- asdf\n" => Ok (P.SPos (R.Position 2 1))
-            , "-- asdf" => Err E.EndOfFile_Comment
+            , "--     \n  " => Ok (P.SPos (R.Position 2 3))
             , "\t" => Err E.Tab
             , " \t" => Err E.Tab
             , "{-" => Err E.EndOfFile_Comment
+            , "{-\n\n" => Err E.EndOfFile_Comment
             ]
 
 
