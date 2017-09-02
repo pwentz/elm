@@ -105,6 +105,11 @@ badParse =
     -1
 
 
+newLineParse : Int
+newLineParse =
+    -2
+
+
 deadend : List Theory -> Parser a
 deadend theories =
     Parser <|
@@ -343,7 +348,7 @@ variable theory isFirst =
             else
                 let
                     state2 =
-                        if firstOffset == -2 then
+                        if firstOffset == newLineParse then
                             varHelp isAlphaNum (offset + 1) (row + 1) 1 source indent context
                         else
                             varHelp isAlphaNum firstOffset row (col + 1) source indent context
@@ -371,7 +376,7 @@ varHelp isGood offset row col source indent context =
         , row = row
         , col = col
         }
-    else if newOffset == -2 then
+    else if newOffset == newLineParse then
         varHelp isGood (offset + 1) (row + 1) 1 source indent context
     else
         varHelp isGood newOffset row (col + 1) source indent context
@@ -470,18 +475,43 @@ whitespaceHelp offset row col source =
         newOffset =
             chomp isSpace offset source
     in
-    if nextChar (is '\n') newOffset source then
+    if nextCharIs '\n' newOffset source then
         whitespaceHelp (newOffset + 1) (row + 1) 1 source
-        {-
-           else if nextChar (is '-') newOffset source then
-               lineComment (newOffset + 1) row (col + 1) source
-           else if nextChar (is '{') newOffset source then
-               multiComment (newOffset + 1) row (col + 1) source
-        -}
-    else if nextChar (is '\t') newOffset source then
+    else if nextCharIs '-' newOffset source then
+        lineComment newOffset row col source
+    else if nextCharIs '{' newOffset source then
+        multiComment newOffset row col source
+    else if nextCharIs '\t' newOffset source then
         ( Just Tab, newOffset, row, col )
     else
         ( Nothing, newOffset, row, col + newOffset - offset )
+
+
+lineComment : Int -> Int -> Int -> String -> ( Maybe Problem, Int, Int, Int )
+lineComment preOffset row col source =
+    if nextCharIs '-' (preOffset + 1) source then
+        let
+            newOffset =
+                chomp (\_ -> True) (preOffset + 2) source
+        in
+        whitespaceHelp newOffset row col source
+    else
+        ( Nothing, preOffset, row, col )
+
+
+multiComment : Int -> Int -> Int -> String -> ( Maybe Problem, Int, Int, Int )
+multiComment preOffset row col source =
+    if nextCharIs '-' (preOffset + 1) source then
+        let
+            ( newOffset, newRow, newCol ) =
+                Prim.findSubString False "-}" (preOffset + 2) row (col + 2) source
+        in
+        if newOffset == badParse then
+            ( Just EndOfFile_Comment, newOffset, row, col )
+        else
+            whitespaceHelp newOffset newRow newCol source
+    else
+        ( Nothing, preOffset, row, col )
 
 
 
@@ -568,6 +598,20 @@ nextChar isGood offset source =
     Prim.isSubChar isGood offset source /= badParse
 
 
+nextCharIs : Char -> Int -> String -> Bool
+nextCharIs good =
+    nextChar ((==) good)
+
+
+nextStringIs : String -> Int -> String -> Bool
+nextStringIs good offset source =
+    let
+        ( newOffset, _, _ ) =
+            Prim.isSubString good offset 0 0 source
+    in
+    newOffset /= badParse
+
+
 
 -- CHOMP NUMBER STUFF
 
@@ -584,7 +628,7 @@ chompInt offset source =
     in
     if offset == stopOffset then
         Err ( stopOffset, Theories [] [] )
-    else if nextChar (is '.') stopOffset source then
+    else if nextCharIs '.' stopOffset source then
         chompFraction offset (stopOffset + 1) source
     else if nextChar isE stopOffset source then
         chompExponent offset (stopOffset + 1) source
@@ -596,9 +640,9 @@ chompInt offset source =
 
 chompZero : Int -> Int -> String -> Number
 chompZero offset zeroOffset source =
-    if nextChar (is '.') zeroOffset source then
+    if nextCharIs '.' zeroOffset source then
         chompFraction offset (zeroOffset + 1) source
-    else if nextChar (is 'x') zeroOffset source then
+    else if nextCharIs 'x' zeroOffset source then
         chompHex offset (zeroOffset + 1) source
     else if nextChar Char.isDigit zeroOffset source then
         Err ( zeroOffset, BadNumberZero )
@@ -663,6 +707,11 @@ chompHex offset xOffset source =
 is : a -> a -> Bool
 is target =
     \char -> char == target
+
+
+isAny : a -> a -> Bool
+isAny _ =
+    \_ -> True
 
 
 isE : Char -> Bool
