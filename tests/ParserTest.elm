@@ -50,14 +50,18 @@ whitespace =
             , "  \n" => Ok (P.SPos (R.Position 2 1))
             , "\n  " => Ok (P.SPos (R.Position 2 3))
             , "{--}" => Ok (P.SPos (R.Position 1 5))
-            , "{-|-}" => Ok (P.SPos (R.Position 1 6))
-            , "{-|\n\n-}\n" => Ok (P.SPos (R.Position 4 1))
+            , "{--}\n" => Ok (P.SPos (R.Position 2 1))
+            , "{-{--}-}" => Ok (P.SPos (R.Position 1 9))
+            , "{-\n\n-}\n" => Ok (P.SPos (R.Position 4 1))
             , "-- asdf\n" => Ok (P.SPos (R.Position 2 1))
             , "--     \n  " => Ok (P.SPos (R.Position 2 3))
+            , "123" => Ok (P.SPos (R.Position 1 1))
+            , "{-|-}" => Ok (P.SPos (R.Position 1 1))
             , "\t" => Err E.Tab
             , " \t" => Err E.Tab
             , "{-" => Err E.EndOfFile_Comment
             , "{-\n\n" => Err E.EndOfFile_Comment
+            , "{-{--}" => Err E.EndOfFile_Comment
             ]
 
 

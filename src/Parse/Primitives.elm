@@ -477,41 +477,24 @@ whitespaceHelp offset row col source =
     in
     if nextCharIs '\n' newOffset source then
         whitespaceHelp (newOffset + 1) (row + 1) 1 source
-    else if nextCharIs '-' newOffset source then
-        lineComment newOffset row col source
-    else if nextCharIs '{' newOffset source then
-        multiComment newOffset row col source
+    else if nextCharsAre '-' '-' newOffset source then
+        whitespaceHelp (chomp isAny (newOffset + 2) source) row col source
+    else if
+        nextCharsAre '{' '-' newOffset source
+            && not (nextCharIs '|' (newOffset + 2) source)
+    then
+        let
+            (( maybeProblem, endOffset, endRow, endCol ) as result) =
+                chompMultiComment (newOffset + 2) row (col + 2) 1 source
+        in
+        if maybeProblem == Nothing then
+            whitespaceHelp endOffset endRow endCol source
+        else
+            result
     else if nextCharIs '\t' newOffset source then
         ( Just Tab, newOffset, row, col )
     else
         ( Nothing, newOffset, row, col + newOffset - offset )
-
-
-lineComment : Int -> Int -> Int -> String -> ( Maybe Problem, Int, Int, Int )
-lineComment preOffset row col source =
-    if nextCharIs '-' (preOffset + 1) source then
-        let
-            newOffset =
-                chomp (\_ -> True) (preOffset + 2) source
-        in
-        whitespaceHelp newOffset row col source
-    else
-        ( Nothing, preOffset, row, col )
-
-
-multiComment : Int -> Int -> Int -> String -> ( Maybe Problem, Int, Int, Int )
-multiComment preOffset row col source =
-    if nextCharIs '-' (preOffset + 1) source then
-        let
-            ( newOffset, newRow, newCol ) =
-                Prim.findSubString False "-}" (preOffset + 2) row (col + 2) source
-        in
-        if newOffset == badParse then
-            ( Just EndOfFile_Comment, newOffset, row, col )
-        else
-            whitespaceHelp newOffset newRow newCol source
-    else
-        ( Nothing, preOffset, row, col )
 
 
 
@@ -601,6 +584,12 @@ nextChar isGood offset source =
 nextCharIs : Char -> Int -> String -> Bool
 nextCharIs good =
     nextChar ((==) good)
+
+
+nextCharsAre : Char -> Char -> Int -> String -> Bool
+nextCharsAre good1 good2 offset source =
+    nextCharIs good1 offset source
+        && nextCharIs good2 (offset + 1) source
 
 
 nextStringIs : String -> Int -> String -> Bool
@@ -701,6 +690,33 @@ chompHex offset xOffset source =
 
 
 
+-- CHOMP COMMENTS
+
+
+chompMultiComment :
+    Int
+    -> Int
+    -> Int
+    -> Int
+    -> String
+    -> ( Maybe Problem, Int, Int, Int )
+chompMultiComment offset row col openComments source =
+    if Prim.isSubChar (is '\n') offset source == newLineParse then
+        chompMultiComment (offset + 1) (row + 1) 1 openComments source
+    else if nextCharsAre '{' '-' offset source then
+        chompMultiComment (offset + 2) row (col + 2) (openComments + 1) source
+    else if nextCharsAre '-' '}' offset source then
+        if openComments == 1 then
+            ( Nothing, offset + 2, row, col + 2 )
+        else
+            chompMultiComment (offset + 2) row (col + 2) (openComments - 1) source
+    else if nextChar isAny offset source then
+        chompMultiComment (offset + 1) row (col + 1) openComments source
+    else
+        ( Just EndOfFile_Comment, offset, row, col )
+
+
+
 -- CHARACTER CHOMP HELPERS
 
 
@@ -709,9 +725,9 @@ is target =
     \char -> char == target
 
 
-isAny : a -> a -> Bool
+isAny : a -> Bool
 isAny _ =
-    \_ -> True
+    True
 
 
 isE : Char -> Bool
