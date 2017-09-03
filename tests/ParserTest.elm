@@ -65,6 +65,16 @@ whitespace =
             ]
 
 
+docComment : Test
+docComment =
+    describe "documentation comment parser" <|
+        List.map (testRun P.docComment)
+            [ "{-|hello-}" => Ok "hello"
+            , "{-|yo-}   " => Ok "yo"
+            , "{-|{-|-}-}   " => Ok "{-|-}"
+            ]
+
+
 
 -- HELPERS
 

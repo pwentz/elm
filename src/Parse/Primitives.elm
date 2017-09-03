@@ -8,6 +8,7 @@ module Parse.Primitives
         , deadend
         , delayedCommit
         , delayedCommitMap
+        , docComment
         , end
         , fail
         , getIndent
@@ -498,6 +499,31 @@ whitespaceHelp offset row col source =
 
 
 
+-- DOCUMENTATION COMMENT
+
+
+docComment : Parser String
+docComment =
+    let
+        parse ({ offset, row, col, source } as state) =
+            let
+                ( maybeProblem, newOffset, newRow, newCol ) =
+                    chompMultiComment offset row col 1 source
+
+                newState =
+                    { state | offset = newOffset, row = newRow, col = newCol }
+            in
+            case maybeProblem of
+                Just problem ->
+                    Bad problem newState
+
+                Nothing ->
+                    Good (String.slice offset (newOffset - 2) source) newState
+    in
+    andThen (\() -> Parser parse) (symbol "{-|")
+
+
+
 -- END
 
 
@@ -605,11 +631,7 @@ nextStringIs good offset source =
 -- CHOMP NUMBER STUFF
 
 
-type alias Number =
-    Result ( Int, Problem ) ( Int, L.Literal )
-
-
-chompInt : Int -> String -> Number
+chompInt : Int -> String -> Result ( Int, Problem ) ( Int, L.Literal )
 chompInt offset source =
     let
         stopOffset =
@@ -627,7 +649,7 @@ chompInt offset source =
         Ok ( stopOffset, readInt offset stopOffset source )
 
 
-chompZero : Int -> Int -> String -> Number
+chompZero : Int -> Int -> String -> Result ( Int, Problem ) ( Int, L.Literal )
 chompZero offset zeroOffset source =
     if nextCharIs '.' zeroOffset source then
         chompFraction offset (zeroOffset + 1) source
@@ -639,7 +661,7 @@ chompZero offset zeroOffset source =
         Ok ( zeroOffset, L.IntNum 0 )
 
 
-chompFraction : Int -> Int -> String -> Number
+chompFraction : Int -> Int -> String -> Result ( Int, Problem ) ( Int, L.Literal )
 chompFraction offset dotOffset source =
     let
         stopOffset =
@@ -655,7 +677,7 @@ chompFraction offset dotOffset source =
         Ok ( stopOffset, readFloat offset stopOffset source )
 
 
-chompExponent : Int -> Int -> String -> Number
+chompExponent : Int -> Int -> String -> Result ( Int, Problem ) ( Int, L.Literal )
 chompExponent offset eOffset source =
     let
         expOffset =
@@ -675,7 +697,7 @@ chompExponent offset eOffset source =
         Ok ( newOffset, readFloat offset newOffset source )
 
 
-chompHex : Int -> Int -> String -> Number
+chompHex : Int -> Int -> String -> Result ( Int, Problem ) ( Int, L.Literal )
 chompHex offset xOffset source =
     let
         newOffset =
