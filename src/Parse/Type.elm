@@ -33,7 +33,9 @@ term =
 
 variable : R.Position -> Parser Type.Raw
 variable start =
-    map2 (\var end -> A.at start end (Type.RVar var)) lowVar getPosition
+    succeed (\var end -> A.at start end (Type.RVar var))
+        |= lowVar
+        |= getPosition
 
 
 
@@ -42,33 +44,38 @@ variable start =
 
 expression : SParser Type.Raw
 expression =
-    let
-        expressionBegin start =
-            oneOf
-                [ app start
-                , succeed (,,) |= term |= getPosition |= whitespace
-                ]
-                |> andThen (expressionEnd start)
+    hint E.Type <| andThen expressionStart getPosition
 
-        expressionEnd start ( tipe1, end1, pos1 ) =
-            oneOf
-                [ succeed identity
-                    |. checkSpace pos1
-                    |. rightArrow
-                    |. spaces
-                    |= expression
-                    |> map
-                        (\( tipe2, end2, pos2 ) ->
-                            let
-                                tipe =
-                                    A.at start end2 (Type.RLambda tipe1 tipe2)
-                            in
-                            ( tipe, end2, pos2 )
-                        )
-                , succeed ( tipe1, end1, pos1 )
-                ]
-    in
-    hint E.Type <| andThen expressionBegin getPosition
+
+expressionStart : R.Position -> SParser Type.Raw
+expressionStart start =
+    oneOf
+        [ app start
+        , succeed (,,)
+            |= term
+            |= getPosition
+            |= whitespace
+        ]
+        |> andThen (expressionEnd start)
+
+
+expressionEnd : R.Position -> ( Type.Raw, R.Position, SPos ) -> SParser Type.Raw
+expressionEnd start ( tipe1, end1, pos1 ) =
+    oneOf
+        [ succeed identity
+            |. checkSpace pos1
+            |. rightArrow
+            |. spaces
+            |= expression
+            |> map
+                (\( tipe2, end2, pos2 ) ->
+                    ( A.at start end2 (Type.RLambda tipe1 tipe2)
+                    , end2
+                    , pos2
+                    )
+                )
+        , succeed ( tipe1, end1, pos1 )
+        ]
 
 
 
@@ -89,49 +96,42 @@ app0 =
 
 app : R.Position -> SParser Type.Raw
 app start =
-    qualifiedCapVar
-        |> andThen
-            (\ctor ->
-                getPosition
-                    |> andThen
-                        (\ctorEnd ->
-                            let
-                                name =
-                                    A.at start ctorEnd (Var.Raw ctor)
-                            in
-                            whitespace
-                                |> andThen
-                                    (\ctorPos ->
-                                        eatArgs [] ctorEnd ctorPos
-                                            |> map
-                                                (\( args, end, pos ) ->
-                                                    let
-                                                        tipe =
-                                                            A.at start end (Type.RType name args)
-                                                    in
-                                                    ( tipe, end, pos )
-                                                )
-                                    )
-                        )
+    succeed (,)
+        |= qualifiedCapVar
+        |= getPosition
+        |> andThen (appHelp start)
+
+
+appHelp : R.Position -> ( String, R.Position ) -> SParser Type.Raw
+appHelp start ( ctor, ctorEnd ) =
+    let
+        name =
+            A.at start ctorEnd (Var.Raw ctor)
+    in
+    succeed identity
+        |= whitespace
+        |> andThen (eatArgs [] ctorEnd)
+        |> map
+            (\( args, end, pos ) ->
+                ( A.at start end (Type.RType name args), end, pos )
             )
 
 
 unionConstructor : SParser ( String, List Type.Raw )
 unionConstructor =
-    capVar
-        |> andThen
-            (\ctor ->
-                getPosition
-                    |> andThen
-                        (\ctorEnd ->
-                            whitespace
-                                |> andThen
-                                    (\ctorSpace ->
-                                        eatArgs [] ctorEnd ctorSpace
-                                            |> map (\( args, end, space ) -> ( ( ctor, args ), end, space ))
-                                    )
-                        )
-            )
+    succeed (,,)
+        |= capVar
+        |= getPosition
+        |= whitespace
+        |> andThen unionConstructorHelp
+
+
+unionConstructorHelp :
+    ( String, R.Position, SPos )
+    -> SParser ( String, List Type.Raw )
+unionConstructorHelp ( ctor, ctorEnd, ctorSpace ) =
+    eatArgs [] ctorEnd ctorSpace
+        |> map (\( args, end, space ) -> ( ( ctor, args ), end, space ))
 
 
 eatArgs : List Type.Raw -> R.Position -> SPos -> SParser (List Type.Raw)
@@ -142,6 +142,7 @@ eatArgs args end pos =
             |= term
             |= getPosition
             |= whitespace
+            |> andThen identity
         , succeed ( List.reverse args, end, pos )
         ]
 
@@ -152,7 +153,7 @@ eatArgs args end pos =
 
 tuple : R.Position -> Parser Type.Raw
 tuple start =
-    map2 (\_ x -> x) leftParen <|
+    skip leftParen <|
         inContext start E.TypeTuple <|
             oneOf
                 [ succeed (\end -> Type.tuple (R.Region start end) [])
@@ -163,7 +164,9 @@ tuple start =
                     |= expression
                     |> andThen
                         (\( tipe, _, pos ) ->
-                            map2 (\_ x -> x) (checkSpace pos) (tupleEnding start [ tipe ])
+                            succeed identity
+                                |. checkSpace pos
+                                |= tupleEnding start [ tipe ]
                         )
                 ]
 
@@ -174,8 +177,15 @@ tupleEnding start tipes =
         [ succeed identity
             |. comma
             |. spaces
-            |= andThen (\( tipe, _, pos ) -> map2 (\_ x -> x) (checkSpace pos) (succeed tipe)) expression
-            |> andThen (\tipe -> tupleEnding start (tipe :: tipes))
+            |= andThen
+                (\( tipe, _, pos ) ->
+                    skip (checkSpace pos) (succeed tipe)
+                )
+                expression
+            |> andThen
+                (\tipe ->
+                    tupleEnding start (tipe :: tipes)
+                )
         , succeed identity
             |. rightParen
             |= getPosition
@@ -197,47 +207,63 @@ tupleEnding start tipes =
 
 record : R.Position -> Parser Type.Raw
 record start =
-    leftCurly
-        |> andThen
-            (\() ->
-                spaces
-                    |> andThen
-                        (\() ->
-                            oneOf
-                                [ succeed (\end -> A.at start end (Type.RRecord [] Nothing))
-                                    |. rightCurly
-                                    |= getPosition
-                                , addLocation lowVar
-                                    |. spaces
-                                    |> andThen
-                                        (\var ->
-                                            oneOf
-                                                [ succeed identity
-                                                    |. pipe
-                                                    |. spaces
-                                                    |= field
-                                                    |> andThen (\firstField -> chompFields [ firstField ])
-                                                    |> map (,)
-                                                    |= getPosition
-                                                    |> map (\( fields, end ) -> A.at start end (Type.RRecord fields (Just (A.map Type.RVar var))))
-                                                , succeed identity
-                                                    |. hasType
-                                                    |. spaces
-                                                    |= expression
-                                                    |> andThen
-                                                        (\( tipe, _, nextPos ) ->
-                                                            succeed (,)
-                                                                |. checkSpace nextPos
-                                                                |= chompFields [ ( var, tipe ) ]
-                                                                |= getPosition
-                                                                |> map (\( fields, end ) -> A.at start end (Type.RRecord fields Nothing))
-                                                        )
-                                                ]
-                                        )
-                                ]
-                        )
-                    |> inContext start E.TypeRecord
-            )
+    succeed identity
+        |. leftCurly
+        |. spaces
+        |= recordHelp start
+
+
+recordHelp : R.Position -> Parser Type.Raw
+recordHelp start =
+    inContext start E.TypeRecord <|
+        oneOf
+            [ succeed (\end -> A.at start end (Type.RRecord [] Nothing))
+                |. rightCurly
+                |= getPosition
+            , addLocation lowVar
+                |. spaces
+                |> andThen (recordEnd start)
+            ]
+
+
+recordEnd : R.Position -> A.Located String -> Parser Type.Raw
+recordEnd start var =
+    oneOf
+        [ let
+            finish ( fields, end ) =
+                Just (A.map Type.RVar var)
+                    |> Type.RRecord fields
+                    |> A.at start end
+
+            getRemainingFields firstField =
+                succeed (,)
+                    |= chompFields [ firstField ]
+                    |= getPosition
+                    |> map finish
+          in
+          succeed identity
+            |. pipe
+            |. spaces
+            |= field
+            |> andThen getRemainingFields
+        , let
+            finish ( fields, end ) =
+                Type.RRecord fields Nothing
+                    |> A.at start end
+
+            getRemainingFields ( tipe, _, nextPos ) =
+                succeed (,)
+                    |. checkSpace nextPos
+                    |= chompFields [ ( var, tipe ) ]
+                    |= getPosition
+                    |> map finish
+          in
+          succeed identity
+            |. hasType
+            |. spaces
+            |= expression
+            |> andThen getRemainingFields
+        ]
 
 
 type alias Field =
@@ -252,21 +278,22 @@ chompFields fields =
             |. spaces
             |= field
             |> andThen chompFields
-        , succeed (List.reverse fields) |. rightCurly
+        , succeed (List.reverse fields)
+            |. rightCurly
         ]
 
 
 field : Parser Field
 field =
-    addLocation lowVar
+    succeed identity
+        |= addLocation lowVar
         |. spaces
         |. hasType
         |. spaces
-        |> andThen
-            (\name ->
-                expression
-                    |> andThen
-                        (\( tipe, _, endPos ) ->
-                            succeed ( name, tipe ) |. checkSpace endPos
-                        )
-            )
+        |> andThen (\name -> andThen (fieldHelp name) expression)
+
+
+fieldHelp : A.Located String -> ( Type.Raw, R.Position, SPos ) -> Parser Field
+fieldHelp name ( tipe, _, endPos ) =
+    succeed ( name, tipe )
+        |. checkSpace endPos

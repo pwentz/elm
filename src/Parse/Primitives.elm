@@ -541,13 +541,13 @@ end =
 -- CONTEXT
 
 
-inContext : E.Context -> Parser a -> Parser a
-inContext ctx (Parser parse) =
+inContext : R.Position -> E.Context -> Parser a -> Parser a
+inContext pos ctx (Parser parse) =
     Parser <|
-        \({ context, row, col } as initialState) ->
+        \({ context } as initialState) ->
             let
                 state1 =
-                    changeContext (( ctx, R.Position row col ) :: context) initialState
+                    changeContext (( ctx, pos ) :: context) initialState
             in
             case parse state1 of
                 Good a state2 ->

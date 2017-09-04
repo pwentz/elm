@@ -8,16 +8,16 @@ module Parse.Helpers
         , comma
         , dot
         , hasType
-          --, hint
         , leftCurly
         , leftParen
-          -- , oneOf
         , pipe
         , qualifiedCapVar
         , qualifiedVar
         , rightArrow
         , rightCurly
         , rightParen
+        , skip
+        , spaces
         )
 
 import AST.Literal as L
@@ -46,6 +46,11 @@ import Set
 (|.) : Parser a -> Parser b -> Parser a
 (|.) keepParser ignoreParser =
     P.map2 always keepParser ignoreParser
+
+
+skip : Parser skip -> Parser a -> Parser a
+skip =
+    P.map2 (\_ a -> a)
 
 
 
