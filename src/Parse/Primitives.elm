@@ -23,6 +23,7 @@ module Parse.Primitives
         , number
         , oneOf
         , run
+        , string
         , succeed
         , symbol
         , whitespace
@@ -520,7 +521,8 @@ docComment =
                 Nothing ->
                     Good (String.slice offset (newOffset - 2) source) newState
     in
-    andThen (\() -> Parser parse) (symbol "{-|")
+    symbol "{-|"
+        |> andThen (\_ -> Parser parse)
 
 
 
@@ -736,6 +738,40 @@ chompMultiComment offset row col openComments source =
         chompMultiComment (offset + 1) row (col + 1) openComments source
     else
         ( Just EndOfFile_Comment, offset, row, col )
+
+
+
+-- CHOMP CHARACTER STUFF
+
+
+chompEscape : Int -> String -> Problem -> Result Problem Int
+chompEscape offset source problem =
+    if Prim.isSubChar isAny offset source == badParse then
+        Err problem
+    else if nextChar isSingleEscapeChar offset source then
+        Ok (offset + 2)
+    else if nextCharIs 'u' offset source && fourHex offset source then
+        Ok (offset + 6)
+    else
+        Err BadEscape
+
+
+isSingleEscapeChar : Char -> Bool
+isSingleEscapeChar char =
+    Set.member char singleEscapeChars
+
+
+singleEscapeChars : Set Char
+singleEscapeChars =
+    Set.fromList [ 'a', 'b', 'f', 'n', 'r', 't', 'v', '"', '\\', '\'' ]
+
+
+fourHex : Int -> String -> Bool
+fourHex offset source =
+    nextChar Char.isHexDigit (offset + 1) source
+        && nextChar Char.isHexDigit (offset + 2) source
+        && nextChar Char.isHexDigit (offset + 3) source
+        && nextChar Char.isHexDigit (offset + 4) source
 
 
 
