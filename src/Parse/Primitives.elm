@@ -467,7 +467,7 @@ whitespaceHelp offset row col source =
         newOffset =
             chomp isSpace offset source
     in
-    if nextCharIs '\n' newOffset source then
+    if atNewLine newOffset source then
         whitespaceHelp (newOffset + 1) (row + 1) 1 source
     else if nextStringIs "--" newOffset source then
         whitespaceHelp (chomp isAny (newOffset + 2) source) row col source
@@ -626,7 +626,7 @@ character =
                 Bad noError state
             else if
                 nextCharIs '\'' (offset + 1) source
-                    || nextCharIs '\n' (offset + 1) source
+                    || atNewLine (offset + 1) source
             then
                 Bad BadChar { state | offset = offset + 1, col = col + 1 }
             else if nextCharIs '\\' (offset + 1) source then
