@@ -75,6 +75,22 @@ docComment =
             ]
 
 
+string : Test
+string =
+    describe "string parser" <|
+        List.map (testRun P.string)
+            [ "\"hello world\"" => Ok "hello world"
+            , "\"bye\\nworld\"" => Ok "bye\nworld"
+            , "\"'\"" => Ok "'"
+            , "\"\\'\"" => Ok "'"
+            , "\"\\t\"" => Ok "\t"
+            , "\"" => Err E.EndOfFile_String
+            , "\"\\\"" => Err E.EndOfFile_String
+            , "\"\n\"" => Err E.NewLineInString
+            , "\"\\x\"" => Err E.BadEscape
+            ]
+
+
 
 -- HELPERS
 

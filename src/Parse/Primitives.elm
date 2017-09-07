@@ -112,6 +112,11 @@ newLineParse =
     -2
 
 
+noError : Problem
+noError =
+    Theories [] []
+
+
 deadend : List Theory -> Parser a
 deadend theories =
     Parser <|
@@ -226,7 +231,7 @@ oneOfHelp : State -> List Problem -> List (Parser a) -> Step a
 oneOfHelp state problems parsers =
     case parsers of
         [] ->
-            Bad (List.foldr mergeProblems (Theories [] []) problems) state
+            Bad (List.foldr mergeProblems noError problems) state
 
         (Parser parse) :: remainingParsers ->
             case parse state of
@@ -526,6 +531,66 @@ docComment =
 
 
 
+-- STRINGS
+
+
+string : Parser String
+string =
+    Parser <|
+        \({ offset, col, source } as state) ->
+            if not (nextCharIs '"' offset source) then
+                Bad noError state
+            -- else if nextCharsAre '"' '"' (offset + 1) source then
+            --     multiString (offset + 3) row (col +3) source
+            else
+                let
+                    ( result, newOffset, newCol ) =
+                        singleString (offset + 1) (col + 1) [] source
+
+                    newState =
+                        { state | offset = newOffset, col = newCol }
+                in
+                case result of
+                    Err problem ->
+                        Bad problem newState
+
+                    Ok str ->
+                        Good str newState
+
+
+singleString :
+    Int
+    -> Int
+    -> List String
+    -> String
+    -> ( Result Problem String, Int, Int )
+singleString offset col acc source =
+    if nextCharIs '"' offset source then
+        ( Ok (String.concat (List.reverse acc)), offset + 1, col + 1 )
+    else if atNewLine offset source then
+        ( Err NewLineInString, offset, col )
+    else if atEnd offset source then
+        ( Err EndOfFile_String, offset, col )
+    else if nextCharIs '\\' offset source then
+        case chompEscape (offset + 1) source EndOfFile_String of
+            Ok ( diff, escapeCode ) ->
+                singleString
+                    (offset + diff)
+                    (col + diff)
+                    (String.fromChar escapeCode :: acc)
+                    source
+
+            Err problem ->
+                ( Err problem, offset, col )
+    else
+        singleString
+            (offset + 1)
+            (col + 1)
+            (String.slice offset (offset + 1) source :: acc)
+            source
+
+
+
 -- END
 
 
@@ -536,7 +601,7 @@ end =
             if String.length state.source == state.offset then
                 Good () state
             else
-                Bad (Theories [] []) state
+                Bad noError state
 
 
 
@@ -725,7 +790,7 @@ chompMultiComment :
     -> String
     -> ( Maybe Problem, Int, Int, Int )
 chompMultiComment offset row col openComments source =
-    if Prim.isSubChar (is '\n') offset source == newLineParse then
+    if atNewLine offset source then
         chompMultiComment (offset + 1) (row + 1) 1 openComments source
     else if nextCharsAre '{' '-' offset source then
         chompMultiComment (offset + 2) row (col + 2) (openComments + 1) source
@@ -744,34 +809,32 @@ chompMultiComment offset row col openComments source =
 -- CHOMP CHARACTER STUFF
 
 
-chompEscape : Int -> String -> Problem -> Result Problem Int
+chompEscape : Int -> String -> Problem -> Result Problem ( Int, Char )
 chompEscape offset source problem =
-    if Prim.isSubChar isAny offset source == badParse then
+    if atEnd offset source then
         Err problem
-    else if nextChar isSingleEscapeChar offset source then
-        Ok (offset + 2)
-    else if nextCharIs 'u' offset source && fourHex offset source then
-        Ok (offset + 6)
+    else if nextCharIs 'a' offset source then
+        Ok ( 2, '\x07' )
+    else if nextCharIs 'b' offset source then
+        Ok ( 2, '\x08' )
+    else if nextCharIs 'f' offset source then
+        Ok ( 2, '\x0C' )
+    else if nextCharIs 'n' offset source then
+        Ok ( 2, '\n' )
+    else if nextCharIs 'r' offset source then
+        Ok ( 2, '\x0D' )
+    else if nextCharIs 't' offset source then
+        Ok ( 2, '\t' )
+    else if nextCharIs 'v' offset source then
+        Ok ( 2, '\x0B' )
+    else if nextCharIs '"' offset source then
+        Ok ( 2, '"' )
+    else if nextCharIs '\\' offset source then
+        Ok ( 2, '\\' )
+    else if nextCharIs '\'' offset source then
+        Ok ( 2, '\'' )
     else
         Err BadEscape
-
-
-isSingleEscapeChar : Char -> Bool
-isSingleEscapeChar char =
-    Set.member char singleEscapeChars
-
-
-singleEscapeChars : Set Char
-singleEscapeChars =
-    Set.fromList [ 'a', 'b', 'f', 'n', 'r', 't', 'v', '"', '\\', '\'' ]
-
-
-fourHex : Int -> String -> Bool
-fourHex offset source =
-    nextChar Char.isHexDigit (offset + 1) source
-        && nextChar Char.isHexDigit (offset + 2) source
-        && nextChar Char.isHexDigit (offset + 3) source
-        && nextChar Char.isHexDigit (offset + 4) source
 
 
 
@@ -811,6 +874,16 @@ isSpace char =
 isAlphaNum : Char -> Bool
 isAlphaNum char =
     Char.isLower char || Char.isUpper char || Char.isDigit char || char == '_'
+
+
+atNewLine : Int -> String -> Bool
+atNewLine offset source =
+    Prim.isSubChar (is '\n') offset source == newLineParse
+
+
+atEnd : Int -> String -> Bool
+atEnd offset source =
+    Prim.isSubChar isAny offset source == badParse
 
 
 
