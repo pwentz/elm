@@ -17,7 +17,7 @@ import Elm.Package as Pkg
 
 
 type Literal
-    = Chr String
+    = Chr Char
     | Str String
     | IntNum Int
     | FloatNum Float
@@ -28,7 +28,7 @@ toString : Literal -> String
 toString literal =
     case literal of
         Chr c ->
-            "'" ++ c ++ "'"
+            "'" ++ String.fromChar c ++ "'"
 
         Str s ->
             "\"" ++ s ++ "\""
