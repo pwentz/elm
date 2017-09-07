@@ -5,6 +5,7 @@ module Parse.Primitives
         , SPos(..)
         , andThen
         , capVar
+        , character
         , deadend
         , delayedCommit
         , delayedCommitMap
@@ -627,6 +628,59 @@ multiString offset row col acc source =
             (col + 1)
             (String.slice offset (offset + 1) source :: acc)
             source
+
+
+
+-- CHARACTER
+
+
+character : Parser Char
+character =
+    Parser <|
+        \({ offset, col, source } as state) ->
+            if not (nextCharIs '\'' offset source) then
+                Bad noError state
+            else if
+                nextCharIs '\'' (offset + 1) source
+                    || nextCharIs '\n' (offset + 1) source
+            then
+                Bad BadChar { state | offset = offset + 1, col = col + 1 }
+            else if nextCharIs '\\' (offset + 1) source then
+                characterEscape state
+            else if nextCharIs '\'' (offset + 2) source then
+                characterEnd state
+            else
+                Bad BadChar { state | offset = offset + 2, col = col + 2 }
+
+
+characterEscape : State -> Step Char
+characterEscape ({ offset, col, source } as state) =
+    case chompEscape (offset + 2) source BadChar of
+        Ok ( diff, escapeCode ) ->
+            let
+                newState =
+                    { state | offset = offset + diff + 1, col = col + diff + 1 }
+            in
+            if nextCharIs '\'' (offset + diff + 1) source then
+                Good escapeCode newState
+            else
+                Bad BadChar newState
+
+        Err problem ->
+            Bad problem { state | offset = offset + 1, col = col + 1 }
+
+
+characterEnd : State -> Step Char
+characterEnd ({ offset, col, source } as state) =
+    case String.uncons (String.slice (offset + 1) (offset + 2) source) of
+        Just ( c, _ ) ->
+            Good c { state | offset = offset + 3, col = col + 3 }
+
+        Nothing ->
+            Debug.crash <|
+                "The character parser seems to have a bug.\n"
+                    ++ "Please report an SSCCE to "
+                    ++ "<https://github.com/hkgumbs/elm/issues>."
 
 
 

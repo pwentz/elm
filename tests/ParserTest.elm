@@ -106,6 +106,21 @@ string =
             ]
 
 
+character : Test
+character =
+    describe "character parser" <|
+        List.map (testRun P.character)
+            [ "'a'" => Ok 'a'
+            , "'\\n'" => Ok '\n'
+            , "'\\''" => Ok '\''
+            , "'''" => Err E.BadChar
+            , "'  '" => Err E.BadChar
+            , "'\n'" => Err E.BadChar
+            , "'\\'" => Err E.BadChar
+            , "'\\x'" => Err E.BadEscape
+            ]
+
+
 
 -- HELPERS
 
