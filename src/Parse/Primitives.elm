@@ -484,10 +484,10 @@ whitespaceHelp offset row col source =
     in
     if nextCharIs '\n' newOffset source then
         whitespaceHelp (newOffset + 1) (row + 1) 1 source
-    else if nextCharsAre '-' '-' newOffset source then
+    else if nextStringIs "--" newOffset source then
         whitespaceHelp (chomp isAny (newOffset + 2) source) row col source
     else if
-        nextCharsAre '{' '-' newOffset source
+        nextStringIs "{-" newOffset source
             && not (nextCharIs '|' (newOffset + 2) source)
     then
         let
@@ -537,11 +537,23 @@ docComment =
 string : Parser String
 string =
     Parser <|
-        \({ offset, col, source } as state) ->
+        \({ offset, col, row, source } as state) ->
             if not (nextCharIs '"' offset source) then
                 Bad noError state
-            -- else if nextCharsAre '"' '"' (offset + 1) source then
-            --     multiString (offset + 3) row (col +3) source
+            else if nextStringIs "\"\"" (offset + 1) source then
+                let
+                    ( result, newOffset, newRow, newCol ) =
+                        multiString (offset + 3) row (col + 3) [] source
+
+                    newState =
+                        { state | offset = newOffset, row = newRow, col = newCol }
+                in
+                case result of
+                    Err problem ->
+                        Bad problem newState
+
+                    Ok str ->
+                        Good str newState
             else
                 let
                     ( result, newOffset, newCol ) =
@@ -567,10 +579,10 @@ singleString :
 singleString offset col acc source =
     if nextCharIs '"' offset source then
         ( Ok (String.concat (List.reverse acc)), offset + 1, col + 1 )
-    else if atNewLine offset source then
-        ( Err NewLineInString, offset, col )
     else if atEnd offset source then
         ( Err EndOfFile_String, offset, col )
+    else if atNewLine offset source then
+        ( Err NewLineInString, offset, col )
     else if nextCharIs '\\' offset source then
         case chompEscape (offset + 1) source EndOfFile_String of
             Ok ( diff, escapeCode ) ->
@@ -585,6 +597,41 @@ singleString offset col acc source =
     else
         singleString
             (offset + 1)
+            (col + 1)
+            (String.slice offset (offset + 1) source :: acc)
+            source
+
+
+multiString :
+    Int
+    -> Int
+    -> Int
+    -> List String
+    -> String
+    -> ( Result Problem String, Int, Int, Int )
+multiString offset row col acc source =
+    if nextStringIs "\"\"\"" offset source then
+        ( Ok (String.concat (List.reverse acc)), offset + 3, row, col + 3 )
+    else if atEnd offset source then
+        ( Err EndOfFile_String, offset, row, col )
+    else if atNewLine offset source then
+        multiString (offset + 1) (row + 1) 1 ("\n" :: acc) source
+    else if nextCharIs '\\' offset source then
+        case chompEscape (offset + 1) source EndOfFile_String of
+            Ok ( diff, escapeCode ) ->
+                multiString
+                    (offset + diff)
+                    row
+                    (col + diff)
+                    (String.fromChar escapeCode :: acc)
+                    source
+
+            Err problem ->
+                ( Err problem, offset, row, col )
+    else
+        multiString
+            (offset + 1)
+            row
             (col + 1)
             (String.slice offset (offset + 1) source :: acc)
             source
@@ -677,12 +724,6 @@ nextChar isGood offset source =
 nextCharIs : Char -> Int -> String -> Bool
 nextCharIs good =
     nextChar ((==) good)
-
-
-nextCharsAre : Char -> Char -> Int -> String -> Bool
-nextCharsAre good1 good2 offset source =
-    nextCharIs good1 offset source
-        && nextCharIs good2 (offset + 1) source
 
 
 nextStringIs : String -> Int -> String -> Bool
@@ -792,9 +833,9 @@ chompMultiComment :
 chompMultiComment offset row col openComments source =
     if atNewLine offset source then
         chompMultiComment (offset + 1) (row + 1) 1 openComments source
-    else if nextCharsAre '{' '-' offset source then
+    else if nextStringIs "{-" offset source then
         chompMultiComment (offset + 2) row (col + 2) (openComments + 1) source
-    else if nextCharsAre '-' '}' offset source then
+    else if nextStringIs "-}" offset source then
         if openComments == 1 then
             ( Nothing, offset + 2, row, col + 2 )
         else
