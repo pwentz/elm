@@ -1,7 +1,6 @@
 module Parse.Primitives
     exposing
-        ( Error
-        , Parser
+        ( Parser
         , SPos(..)
         , andThen
         , capVar
@@ -64,7 +63,7 @@ type alias State =
     }
 
 
-run : Parser a -> String -> Result Error a
+run : Parser a -> String -> Result E.ParseError a
 run (Parser parse) source =
     let
         initialState =
@@ -81,26 +80,11 @@ run (Parser parse) source =
             Ok a
 
         Bad problem { row, col, context } ->
-            Err
-                { row = row
-                , col = col
-                , source = source
-                , problem = problem
-                , context = context
-                }
+            Err (E.ParseError row col problem)
 
 
 
 -- ERRORS
-
-
-type alias Error =
-    { row : Int
-    , col : Int
-    , source : String
-    , problem : Problem
-    , context : E.ContextStack
-    }
 
 
 badParse : Int
