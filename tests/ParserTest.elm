@@ -130,7 +130,7 @@ testRun parser ( str, result ) =
     test ("can parse '" ++ str ++ "'") <|
         \_ ->
             P.run parser str
-                |> Result.mapError .problem
+                |> Result.mapError (\(E.ParseError _ _ problem) -> problem)
                 |> Expect.equal result
 
 

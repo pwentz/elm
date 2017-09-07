@@ -884,26 +884,16 @@ chompEscape : Int -> String -> Problem -> Result Problem ( Int, Char )
 chompEscape offset source problem =
     if atEnd offset source then
         Err problem
-    else if nextCharIs 'a' offset source then
-        Ok ( 2, '\x07' )
-    else if nextCharIs 'b' offset source then
-        Ok ( 2, '\x08' )
-    else if nextCharIs 'f' offset source then
-        Ok ( 2, '\x0C' )
     else if nextCharIs 'n' offset source then
         Ok ( 2, '\n' )
-    else if nextCharIs 'r' offset source then
-        Ok ( 2, '\x0D' )
     else if nextCharIs 't' offset source then
         Ok ( 2, '\t' )
-    else if nextCharIs 'v' offset source then
-        Ok ( 2, '\x0B' )
     else if nextCharIs '"' offset source then
         Ok ( 2, '"' )
-    else if nextCharIs '\\' offset source then
-        Ok ( 2, '\\' )
     else if nextCharIs '\'' offset source then
         Ok ( 2, '\'' )
+    else if nextCharIs '\\' offset source then
+        Ok ( 2, '\\' )
     else
         Err BadEscape
 
