@@ -49,3 +49,41 @@ mkCtor ctor =
 
         _ ->
             P.Ctor (Var.Raw ctor) []
+
+
+
+-- RECORDS
+
+
+record : R.Position -> Parser P.Raw
+record start =
+    leftCurly
+        |> andThen (\_ -> inContext start E.ExprRecord (recordStart start))
+
+
+recordStart : R.Position -> Parser P.Raw
+recordStart start =
+    [ lowVar
+        |. spaces
+        |> andThen (\var -> recordEnd start [ var ])
+    , succeed identity
+        |. rightCurly
+        |= getPosition
+        |> map (\end -> A.at start end (P.Record []))
+    ]
+
+
+recordEnd : R.Position -> List String -> Parser P.Raw
+recordEnd start vars =
+    oneOf
+        [ succeed identity
+            |. comma
+            |. spaces
+            |= lowVar
+            |. spaces
+            |> andThen (\var -> recordEnd start (var :: vars))
+        , succeed identity
+            |. rightCurly
+            |= getPosition
+            |> map (\end -> A.at start end (P.Record vars))
+        ]
