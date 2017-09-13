@@ -57,20 +57,24 @@ mkCtor ctor =
 
 record : R.Position -> Parser P.Raw
 record start =
-    leftCurly
-        |> andThen (\_ -> inContext start E.ExprRecord (recordStart start))
+    succeed identity
+        |. leftCurly
+        |= inContext start E.ExprRecord (recordStart start)
 
 
 recordStart : R.Position -> Parser P.Raw
 recordStart start =
-    [ lowVar
+    succeed identity
         |. spaces
-        |> andThen (\var -> recordEnd start [ var ])
-    , succeed identity
-        |. rightCurly
-        |= getPosition
-        |> map (\end -> A.at start end (P.Record []))
-    ]
+        |= oneOf
+            [ lowVar
+                |. spaces
+                |> andThen (\var -> recordEnd start [ var ])
+            , succeed identity
+                |. rightCurly
+                |= getPosition
+                |> map (\end -> A.at start end (P.Record []))
+            ]
 
 
 recordEnd : R.Position -> List String -> Parser P.Raw
@@ -86,4 +90,109 @@ recordEnd start vars =
             |. rightCurly
             |= getPosition
             |> map (\end -> A.at start end (P.Record vars))
+        ]
+
+
+
+-- TUPLES
+
+
+tuple : R.Position -> Parser P.Raw
+tuple start =
+    succeed identity
+        |. leftParen
+        |= inContext start E.ExprTuple (tupleStart start)
+
+
+tupleStart : R.Position -> Parser P.Raw
+tupleStart start =
+    succeed identity
+        |. spaces
+        |= oneOf
+            [ expression
+                |> andThen
+                    (\( pattern, sPos ) ->
+                        succeed identity
+                            |. checkSpace sPos
+                            |= tupleEnd start [ pattern ]
+                    )
+            , succeed identity
+                |. rightParen
+                |= getPosition
+                |> map (\end -> A.at start end (P.tuple []))
+            ]
+
+
+tupleEnd : R.Position -> List P.Raw -> Parser P.Raw
+tupleEnd start patterns =
+    oneOf
+        [ succeed identity
+            |. comma
+            |. spaces
+            |= expression
+            |> andThen
+                (\( pattern, sPos ) ->
+                    succeed identity
+                        |. checkSpace sPos
+                        |= tupleEnd start (pattern :: patterns)
+                )
+        , case patterns of
+            [ pattern ] ->
+                succeed pattern
+                    |. rightParen
+
+            _ ->
+                succeed identity
+                    |. rightParen
+                    |= getPosition
+                    |> map (\end -> A.at start end (P.tuple (List.reverse patterns)))
+        ]
+
+
+
+-- LIST
+
+
+list : R.Position -> Parser P.Raw
+list start =
+    succeed identity
+        |. leftSquare
+        |= inContext start E.PatternList listStart
+
+
+listStart : Parser P.Raw
+listStart =
+    succeed identity
+        |. spaces
+        |= oneOf
+            [ expression
+                |> andThen
+                    (\( pattern, sPos ) ->
+                        succeed identity
+                            |. checkSpace sPos
+                            |= listEnd [ pattern ]
+                    )
+            , succeed identity
+                |. rightSquare
+                |= getPosition
+                |> map (\end -> P.list end [])
+            ]
+
+
+listEnd : List P.Raw -> Parser P.Raw
+listEnd patterns =
+    oneOf
+        [ succeed identity
+            |. comma
+            |. spaces
+            |= expression
+            |> andThen
+                (\( pattern, sPos ) ->
+                    succeed identity
+                        |. checkSpace sPos
+                        |= listEnd (pattern :: patterns)
+                )
+        , getPosition
+            |. rightSquare
+            |> map (\end -> P.list end (List.reverse patterns))
         ]
