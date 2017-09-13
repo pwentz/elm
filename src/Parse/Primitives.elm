@@ -26,6 +26,7 @@ module Parse.Primitives
         , string
         , succeed
         , symbol
+        , underscore
         , whitespace
         )
 
@@ -311,6 +312,34 @@ token problem str =
                     , row = newRow
                     , col = newCol
                     }
+
+
+underscore : Parser ()
+underscore =
+    Parser <|
+        \({ source, offset, col } as state) ->
+            if not (nextCharIs '_' offset source) then
+                Bad noError state
+            else if nextChar isAlphaNum (offset + 1) source then
+                Bad (BadUnderscore (getSecondChar "underscore" state))
+                    { state | offset = offset + 1, col = col + 1 }
+            else
+                Good ()
+                    { state | offset = offset + 1, col = col + 1 }
+
+
+underscoreEnd : State -> Step ()
+underscoreEnd ({ offset, col, source } as state) =
+    case String.uncons (String.dropLeft (offset + 1) source) of
+        Just ( c, _ ) ->
+            Bad (BadUnderscore c)
+                { state | offset = offset + 1, col = col + 1 }
+
+        Nothing ->
+            Debug.crash <|
+                "The underscore parser seems to have a bug.\n"
+                    ++ "Please report an SSCCE to "
+                    ++ "<https://github.com/hkgumbs/elm/issues>."
 
 
 
@@ -632,7 +661,9 @@ character =
             else if nextCharIs '\\' (offset + 1) source then
                 characterEscape state
             else if nextCharIs '\'' (offset + 2) source then
-                characterEnd state
+                Good
+                    (getSecondChar "character" state)
+                    { state | offset = offset + 3, col = col + 3 }
             else
                 Bad BadChar { state | offset = offset + 2, col = col + 2 }
 
@@ -652,19 +683,6 @@ characterEscape ({ offset, col, source } as state) =
 
         Err problem ->
             Bad problem { state | offset = offset + 1, col = col + 1 }
-
-
-characterEnd : State -> Step Char
-characterEnd ({ offset, col, source } as state) =
-    case String.uncons (String.slice (offset + 1) (offset + 2) source) of
-        Just ( c, _ ) ->
-            Good c { state | offset = offset + 3, col = col + 3 }
-
-        Nothing ->
-            Debug.crash <|
-                "The character parser seems to have a bug.\n"
-                    ++ "Please report an SSCCE to "
-                    ++ "<https://github.com/hkgumbs/elm/issues>."
 
 
 
@@ -945,6 +963,21 @@ atNewLine offset source =
 atEnd : Int -> String -> Bool
 atEnd offset source =
     Prim.isSubChar isAny offset source == badParse
+
+
+getSecondChar : String -> State -> Char
+getSecondChar context ({ offset, source } as state) =
+    case String.uncons (String.dropLeft (offset + 1) source) of
+        Just ( char, _ ) ->
+            char
+
+        Nothing ->
+            Debug.crash <|
+                "The "
+                    ++ context
+                    ++ " parser seems to have a bug.\n"
+                    ++ "Please report an SSCCE to "
+                    ++ "<https://github.com/hkgumbs/elm/issues>."
 
 
 

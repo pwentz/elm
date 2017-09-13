@@ -6,16 +6,19 @@ module Parse.Helpers
         , addLocation
         , checkSpace
         , comma
+        , cons
         , dot
         , hasType
         , leftCurly
         , leftParen
+        , leftSquare
         , pipe
         , qualifiedCapVar
         , qualifiedVar
         , rightArrow
         , rightCurly
         , rightParen
+        , rightSquare
         , skip
         , spaces
         )
@@ -72,6 +75,11 @@ pipe =
     P.symbol "|"
 
 
+cons : Parser ()
+cons =
+    P.symbol "::"
+
+
 hasType : Parser ()
 hasType =
     P.symbol ":"
@@ -90,6 +98,16 @@ leftParen =
 rightParen : Parser ()
 rightParen =
     P.symbol ")"
+
+
+leftSquare : Parser ()
+leftSquare =
+    P.symbol "["
+
+
+rightSquare : Parser ()
+rightSquare =
+    P.symbol "]"
 
 
 leftCurly : Parser ()

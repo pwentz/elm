@@ -26,7 +26,7 @@ termHelp start =
         [ record start
         , tuple start
         , list start
-        , succeed (,,)
+        , succeed (,)
             |= oneOf
                 [ map (\_ -> P.Anything) underscore
                 , map P.Var lowVar
@@ -34,7 +34,7 @@ termHelp start =
                 , map P.Literal Literal.literal
                 ]
             |= getPosition
-            |> map (\( pattern, end ) -> A.At start end pattern)
+            |> map (\( pattern, end ) -> A.at start end pattern)
         ]
 
 
@@ -195,4 +195,109 @@ listEnd patterns =
         , getPosition
             |. rightSquare
             |> map (\end -> P.list end (List.reverse patterns))
+        ]
+
+
+
+-- PATTERN EXPRESSION
+
+
+expression : Parser ( P.Raw, SPos )
+expression =
+    hint E.Pattern <|
+        (succeed (,)
+            |= getPosition
+            |= consTerm
+            |> map (\( start, cTerm ) -> exprHelp [] cTerm)
+        )
+
+
+consTerm : SParser P.Raw
+consTerm =
+    oneOf
+        [ succeed (,)
+            |= getPosition
+            |= qualifiedCapVar
+            |> andThen
+                (\( start, ctor ) ->
+                    case ctor of
+                        "True" ->
+                            boolEnd start True
+
+                        "False" ->
+                            boolEnd start False
+
+                        _ ->
+                            constructorStart start ctor []
+                )
+        , succeed (,)
+            |= term
+            |= getPosition
+            |. whitespace
+        ]
+
+
+boolEnd : R.Position -> Bool -> SParser P.Raw
+boolEnd start bool =
+    succeed (,)
+        |= getPosition
+        |= whitespace
+        |> map
+            (\( end, sPos ) ->
+                ( A.at start end <| P.Literal (L.Boolean bool), end, sPos )
+            )
+
+
+exprHelp : R.Position -> List P.Raw -> ( P.Raw, R.Position, SPos ) -> Parser ( P.Raw, SPos )
+exprHelp start patterns ( pattern, end, sPos ) =
+    oneOf
+        [ succeed identity
+            |. checkSpace sPos
+            |. cons
+            |. spaces
+            |= andThen (exprHelp start (pattern :: patterns)) consTerm
+        , succeed (,,)
+            |. checkSpace sPos
+            |. keyword "as"
+            |. spaces
+            |= lowVar
+            |= getPosition
+            |= whitespace
+                map
+                (\( alias_, newEnd, newSpace ) ->
+                    ( A.at start newEnd <|
+                        P.Alias alias_ (List.foldl (consHelp end) pattern patterns)
+                    , newSpace
+                    )
+                )
+        , succeed ( List.foldl (consHelp end) pattern patterns, sPos )
+        ]
+
+
+consHelp : R.Position -> P.Raw -> P.Raw -> P.Raw
+consHelp end tl ((A.A (R.Region start _) _) as hd) =
+    A.at start end (P.Ctor (Var.Raw "::") [ hd, tl ])
+
+
+constructorStart : R.Position -> String -> List P.Raw -> SParser P.Raw
+constructorStart start ctor args =
+    succeed (,)
+        |= getPosition
+        |= whitespace
+        |> andThen (uncurry (constructorEnd start ctor args))
+
+
+constructorEnd : R.Position -> String -> List P.Raw -> R.Position -> SPos -> SParser P.Raw
+constructorEnd start ctor args end sPos =
+    oneOf
+        [ succeed identity
+            |. checkSpace sPos
+            |= term
+            |> map (\arg -> constructorStart start ctor (arg :: args))
+        , succeed
+            ( A.at start end <|
+                P.Ctor (Var.Raw ctor) (List.reverse args)
+            , end
+            , sPos
+            )
         ]
