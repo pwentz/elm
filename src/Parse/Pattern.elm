@@ -208,7 +208,7 @@ expression =
         (succeed (,)
             |= getPosition
             |= consTerm
-            |> map (\( start, cTerm ) -> exprHelp [] cTerm)
+            |> andThen (\( start, cTerm ) -> exprHelp start [] cTerm)
         )
 
 
@@ -230,10 +230,10 @@ consTerm =
                         _ ->
                             constructorStart start ctor []
                 )
-        , succeed (,)
+        , succeed (,,)
             |= term
             |= getPosition
-            |. whitespace
+            |= whitespace
         ]
 
 
@@ -263,7 +263,7 @@ exprHelp start patterns ( pattern, end, sPos ) =
             |= lowVar
             |= getPosition
             |= whitespace
-                map
+            |> map
                 (\( alias_, newEnd, newSpace ) ->
                     ( A.at start newEnd <|
                         P.Alias alias_ (List.foldl (consHelp end) pattern patterns)
@@ -293,7 +293,7 @@ constructorEnd start ctor args end sPos =
         [ succeed identity
             |. checkSpace sPos
             |= term
-            |> map (\arg -> constructorStart start ctor (arg :: args))
+            |> andThen (\arg -> constructorStart start ctor (arg :: args))
         , succeed
             ( A.at start end <|
                 P.Ctor (Var.Raw ctor) (List.reverse args)
