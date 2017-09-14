@@ -8,6 +8,7 @@ module Parse.Helpers
         , comma
         , cons
         , dot
+        , equals
         , hasType
         , leftCurly
         , leftParen
@@ -23,8 +24,6 @@ module Parse.Helpers
         , spaces
         )
 
-import AST.Literal as L
-import Char
 import Parse.Primitives as P exposing (Parser)
 import Reporting.Annotation as A
 import Reporting.Error.Syntax as E
@@ -35,7 +34,6 @@ import Reporting.Error.Syntax as E
         , Theory(..)
         )
 import Reporting.Region as R
-import Set
 
 
 -- PARSER
@@ -58,6 +56,11 @@ skip =
 
 
 -- SYMBOLS
+
+
+equals : Parser ()
+equals =
+    P.symbol "="
 
 
 dot : Parser ()
